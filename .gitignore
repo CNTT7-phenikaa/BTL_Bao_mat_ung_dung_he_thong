@@ -5,6 +5,8 @@ __pycache__/
 
 # Dataset
 data/raw/
+data/processed/*.csv
+data/processed/*.pkl
 
 # Trained models
 outputs/models/
