@@ -4,6 +4,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import StandardScaler
 import joblib
+from src.config import SELECTED_FEATURES
 
 def remove_duplicates(df):
     return df.drop_duplicates()
@@ -30,23 +31,7 @@ def split_data(X, y):
 
 # chọn đặc trưng
 def select_features(df):
-    selected_features = [
-        'Flow Duration',
-        'Flow Bytes/s',
-        'Flow Packets/s',
-        'Total Fwd Packets',
-        'Total Backward Packets',
-        'Packet Length Mean',
-        'Packet Length Std',
-        'Average Packet Size',
-        'Flow IAT Mean',
-        'Flow IAT Std',
-        'SYN Flag Count',
-        'ACK Flag Count',
-        'Label'
-    ]
-
-    return df[selected_features]
+    return df[SELECTED_FEATURES]
 #mã nhãn
 def encode_labels(df):
     le = LabelEncoder()
