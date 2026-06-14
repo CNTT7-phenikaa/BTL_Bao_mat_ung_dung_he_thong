@@ -4,7 +4,7 @@ import numpy as np
 import joblib
 import os
 from src.config import SELECTED_FEATURES
-from src.preprocessing import select_features
+from src.preprocessing import clean_network_data, select_features
 
 MODEL_PATH = "outputs/models/random_forest.pkl"
 SCALER_PATH = "outputs/models/scaler.pkl"
@@ -117,37 +117,33 @@ def show_intro_page():
     """)
 
 def show_predict_page(model, scaler):
-    st.title("🚨 Trung tâm Cảnh báo Sự cố (SOC Dashboard)")
+    st.title("🚨 Trung tâm cảnh báo sự cố an ninh mạng")
 
     st.markdown("""
-    **Khu vực Giám sát:** Tải lên tệp nhật ký lưu lượng mạng (CSV) được trích xuất từ thiết bị định tuyến hoặc tường lửa để phân tích.
+    **Khu vực giám sát:** Tải lên tệp nhật ký lưu lượng mạng (.csv) được trích xuất từ thiết bị định tuyến hoặc tường lửa để phân tích.
     """)
 
     uploaded_file = st.file_uploader(
-        "Tải lên tệp lưu lượng mạng (CSV)",
+        "Tải lên tệp lưu lượng mạng (.csv)",
         type=["csv"]
     )
 
     if uploaded_file is None:
         st.info("Trạng thái: Đang chờ dữ liệu đầu vào...")
+        if "prediction_results" in st.session_state:
+            del st.session_state["prediction_results"]
         return
 
     try:
         df = pd.read_csv(uploaded_file)
     except Exception as e:
-        st.error("Lỗi đọc tệp. Vui lòng kiểm tra định dạng CSV.")
+        st.error("Lỗi đọc tệp. Vui lòng kiểm tra định dạng tệp.")
         return
-
-    # Chỉ hiển thị checkbox nếu người dùng thực sự cần (Có thể ẩn đi bằng expander cho giao diện gọn)
-    with st.expander("⚙️ Cấu hình Nâng cao"):
-        already_scaled = st.checkbox("Bỏ qua bước chuẩn hóa (Nếu tệp đã scale sẵn)", value=False)
-
-    if st.button("Phân tích Lưu lượng Mạng", type="primary"):
+    if st.button("Phân tích lưu lượng mạng", type="primary"):
         with st.spinner("Đang quét lưu lượng thông qua mô hình Random Forest..."):
             df_clean, X_model, missing_cols, removed_rows = prepare_uploaded_data(
                 df,
                 scaler,
-                already_scaled=already_scaled
             )
 
             if missing_cols:
@@ -162,41 +158,40 @@ def show_predict_page(model, scaler):
             try:
                 predictions = model.predict(X_model)
             except Exception as e:
-                st.error("Lỗi suy luận mô hình (Inference Error).")
+                st.error("Lỗi suy luận mô hình.")
                 return
 
             result_df = df_clean.copy()
             result_df["Predicted_Label"] = predictions
-
-        st.success("Hoàn tất quét lưu lượng!")
-        show_prediction_dashboard(result_df)
+            
+            st.session_state["prediction_results"] = result_df
+            st.success("Hoàn tất quét lưu lượng!")
+            
+    if "prediction_results" in st.session_state:
+        show_prediction_dashboard(st.session_state["prediction_results"])
 
 
 def show_prediction_dashboard(result_df):
     st.markdown("---")
-    st.subheader("🖥️ Bảng Điều khiển Trạng thái (System Status)")
+    st.subheader("🖥️ Bảng điều khiển trạng thái")
 
     total_flows = len(result_df)
     benign_count = (result_df["Predicted_Label"] == "BENIGN").sum()
     attack_count = total_flows - benign_count
     attack_rate = attack_count / total_flows * 100 if total_flows > 0 else 0
 
-    # 1. Trạng thái cảnh báo màu sắc theo Threat Level
     if attack_count > 0:
         st.error(f"⚠️ MỨC ĐỘ NGUY HIỂM: CAO | Đã phát hiện {attack_count} luồng mạng độc hại!")
     else:
         st.success("✅ MỨC ĐỘ NGUY HIỂM: THẤP | Hệ thống an toàn, không phát hiện xâm nhập.")
 
-    # 2. Các chỉ số tổng quan (Metrics)
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Tổng số Connection", total_flows)
-    col2.metric("Traffic Hợp lệ (BENIGN)", benign_count)
-    col3.metric("Traffic Tấn công (ATTACK)", attack_count, delta_color="inverse")
-    col4.metric("Tỷ lệ Rủi ro", f"{attack_rate:.2f}%")
-
+    col1.metric("Tổng số connection", total_flows)
+    col2.metric("Traffic hợp lệ (BENIGN)", benign_count)
+    col3.metric("Traffic tấn công (ATTACK)", attack_count, delta_color="inverse")
+    col4.metric("Tỷ lệ rủi ro", f"{attack_rate:.2f}%")
     st.markdown("---")
 
-    # 3. Phân tích loại hình tấn công
     if attack_count > 0:
         col_chart, col_action = st.columns([1, 1])
         
@@ -204,15 +199,14 @@ def show_prediction_dashboard(result_df):
         top_attack = attack_df["Predicted_Label"].value_counts().idxmax()
         
         with col_chart:
-            st.subheader("📊 Phân bố Loại hình Tấn công")
+            st.subheader("📊 Phân bố Loại hình tấn công")
             attack_counts = attack_df["Predicted_Label"].value_counts()
-            st.bar_chart(attack_counts, color="#ff4b4b") # Đổi biểu đồ tấn công sang màu đỏ
+            st.bar_chart(attack_counts, color="#ff4b4b") 
 
         with col_action:
-            st.subheader("🛡️ Đề xuất Ứng phó Tự động (Playbook)")
+            st.subheader("🛡️ Đề xuất ứng phó tự động (Playbook)")
             st.warning(f"**Tấn công chủ đạo được phát hiện: {top_attack}**")
             
-            # Giả lập logic đưa ra Playbook dựa trên loại tấn công
             if "DoS" in top_attack or "DDoS" in top_attack:
                 st.markdown("""
                 **Hành động khuyến nghị:**
@@ -224,45 +218,70 @@ def show_prediction_dashboard(result_df):
                 st.markdown("""
                 **Hành động khuyến nghị:**
                 * Chặn ngay lập tức địa chỉ IP quét cổng.
-                * Đóng các cổng (Ports) không cần thiết ra Internet.
+                * Đóng các cổng không cần thiết ra Internet.
                 """)
                 st.code("iptables -A INPUT -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s -j ACCEPT", language="bash")
             else:
                 st.markdown("**Hành động khuyến nghị:** Cách ly luồng mạng bị ảnh hưởng và gửi cảnh báo tới quản trị viên.")
 
-    # 4. Nhật ký Sự kiện Hệ thống (Alert Logs)
-    st.subheader("📄 Nhật ký Sự kiện Mạng (Network Event Logs)")
-    
-    label_options = ["Tất cả Cảnh báo (ATTACK)"] + sorted(result_df["Predicted_Label"].astype(str).unique().tolist())
-    selected_label = st.selectbox("Lọc nhật ký", label_options)
 
-    if selected_label == "Tất cả Cảnh báo (ATTACK)":
-        filtered_df = result_df[result_df["Predicted_Label"] != "BENIGN"]
+
+    st.subheader("📄 Nhật ký Sự kiện Mạng (Network Event Logs)")
+    unique_labels = sorted(result_df["Predicted_Label"].astype(str).unique().tolist())
+    label_options = [
+        "Tất cả lưu lượng (All Traffic)", 
+        "Tất cả cảnh báo (All Attacks)"
+    ] + unique_labels
+    
+    selected_label = st.selectbox("Lọc nhật ký", label_options)
+    if selected_label == "Tất cả lưu lượng (All Traffic)":
+        filtered_df = result_df 
+    elif selected_label == "Tất cả cảnh báo (All Attacks)":
+        filtered_df = result_df[result_df["Predicted_Label"] != "BENIGN"] 
     else:
         filtered_df = result_df[result_df["Predicted_Label"].astype(str) == selected_label]
-
-    # Style DataFrame: Bôi đỏ các dòng là Attack
-    def highlight_attack(s):
-        is_attack = s.Predicted_Label != 'BENIGN'
-        return ['background-color: #ffe6e6; color: #a30000' if v else '' for v in is_attack]
+    def highlight_attack(row):
+        if row['Predicted_Label'] != 'BENIGN':
+            return ['background-color: #ffe6e6; color: #a30000'] * len(row)
+        else:
+            return [''] * len(row)
 
     if not filtered_df.empty:
-        # Chỉ hiển thị một số cột quan trọng cho đỡ rối mắt (bạn có thể thay đổi list này dựa vào dữ liệu thực tế)
         display_columns = ["Destination Port", "Flow Duration", "Total Fwd Packets", "Predicted_Label"]
-        # Lọc các cột có tồn tại trong df
         display_columns = [col for col in display_columns if col in filtered_df.columns] 
-        
-        st.dataframe(filtered_df[display_columns].head(100).style.apply(highlight_attack, axis=1), use_container_width=True)
+    
+        styled_df = filtered_df[display_columns].head(100).style.apply(highlight_attack, axis=1)
+        st.dataframe(styled_df, use_container_width=True)
     else:
         st.info("Không có nhật ký phù hợp với bộ lọc.")
 
     csv_data = result_df.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
-        label="📥 Xuất báo cáo sự cố (CSV)",
+        label="📥 Xuất báo cáo sự cố(csv)",
         data=csv_data,
-        file_name="security_incident_report.csv",
+        file_name="canh_bao_luu_luong.csv",
         mime="text/csv"
     )
+def prepare_uploaded_data(df, scaler, already_scaled=False):
+
+    missing_cols = [
+        col for col in SELECTED_FEATURES
+        if col not in df.columns
+    ]
+
+    if missing_cols:
+        return None, None, missing_cols, 0
+
+    original_rows = len(df)
+    df_clean = clean_network_data(df, SELECTED_FEATURES)
+    removed_rows = original_rows - len(df_clean)
+    X = select_features(df_clean)
+    if already_scaled:
+        X_model = X
+    else:
+        X_model = scaler.transform(X)
+
+    return df_clean, X_model, [], removed_rows
 
 
 def show_evaluation_page():
@@ -294,33 +313,6 @@ def show_evaluation_page():
     else:
         st.warning("Chưa tìm thấy file feature_importance.png trong outputs/figures.")
 
-def prepare_uploaded_data(df, scaler, already_scaled=False):
-    missing_cols = [
-        col for col in SELECTED_FEATURES
-        if col not in df.columns
-    ]
-
-    if missing_cols:
-        return None, None, missing_cols, 0
-
-    df_clean = df.copy()
-    original_rows = len(df_clean)
-
-    df_clean = df_clean.replace([np.inf, -np.inf], np.nan)
-    df_clean = df_clean.dropna(subset=SELECTED_FEATURES)
-
-    removed_rows = original_rows - len(df_clean)
-
-    X = select_features(df_clean)
-
-    if already_scaled:
-        X_model = X
-    else:
-        X_model = scaler.transform(X)
-
-    return df_clean, X_model, [], removed_rows
-
-
 def main():
     model, scaler = load_model_and_scaler()
 
@@ -329,7 +321,7 @@ def main():
         "Chọn trang",
         [
             "Giới thiệu",
-            "Dự đoán từ file CSV",
+            "Trung tâm dự đoán",
             "Đánh giá mô hình"
         ]
     )
@@ -337,7 +329,7 @@ def main():
     if page == "Giới thiệu":
         show_intro_page()
 
-    elif page == "Dự đoán từ file CSV":
+    elif page == "Trung tâm dự đoán":
         show_predict_page(model, scaler)
 
     elif page == "Đánh giá mô hình":
