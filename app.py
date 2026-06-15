@@ -12,7 +12,7 @@ SCALER_PATH = "outputs/models/scaler.pkl"
 
 
 st.set_page_config(
-    page_title="NIDS Detection Demo",
+    page_title="NIDS Demo",
     layout="wide"
 )
 
@@ -187,7 +187,8 @@ def show_prediction_dashboard(result_df):
     if total_flows > 0:
         attack_rate = attack_count / total_flows * 100
     else:
-        return 0
+        attack_rate = 0
+    st.session_state["bao_dong_gia"] = attack_rate
 
     if attack_count == 0:
         st.success("✅ MỨC ĐỘ NGUY HIỂM: THẤP | Hệ thống an toàn, không phát hiện xâm nhập")
@@ -196,11 +197,6 @@ def show_prediction_dashboard(result_df):
         
     else:
         st.error(f"🚨 MỨC ĐỘ NGUY HIỂM: CAO | Đã phát hiện {attack_count} luồng mạng độc hại!")
-        st.toast("Đang phân tích mức độ nghiêm trọng...", icon="🔥")
-        time.sleep(0.5)
-        st.toast("CẢNH BÁO: Tải trọng luồng mạng tăng đột biến!", icon="🚨")
-        time.sleep(0.5)
-        st.toast("Yêu cầu: Kiểm tra Playbook ứng phó!", icon="🛡️")
         
 
     col1, col2, col3, col4 = st.columns(4)
@@ -348,9 +344,13 @@ def show_threat_intel_page():
     else:
         ht_do_tre = "None"
         trang_thai = "Không có thông tin"
+    if "bao_dong_gia" in st.session_state:
+        chi_so = f"{st.session_state["bao_dong_gia"]: .2f}%"
+    else:
+        chi_so = "None" 
     col1, col2, col3 = st.columns(3)
     col1.metric("Độ chính xác kiểm thử (Accuracy)", "99.31%", "Đạt chuẩn phân tích")
-    col2.metric("Tỷ lệ báo động giả", "< 0.05%", "Tối ưu áp lực cho đội an ninh mạng", delta_color="inverse")
+    col2.metric("Tỷ lệ báo động tấn công", chi_so, delta_color="inverse")
     col3.metric("Độ trễ suy luận", ht_do_tre, trang_thai) 
 
     st.write("---")
