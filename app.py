@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
+import time
 from src.config import SELECTED_FEATURES
 from src.preprocessing import clean_network_data, select_features
 
@@ -80,9 +81,9 @@ def show_intro_page():
             "Normal Traffic"],
         "Mã Kỹ thuật (Technique ID)": [
             "T1046 - Network Service Scanning: Kẻ tấn công quét cổng mạng để xác định các dịch vụ đang chạy trên máy mục tiêu",
-            "T1498 - Network Denial of Service:Các loại tấn công làm ngừng hoạt động dịch vụ mục tiêu bằng cách gửi luồng dữ liệu quá tải hoặc yêu cầu HTTP bất hợp pháp ",
+            "T1498 - Network Denial of Service: Các loại tấn công làm ngừng hoạt động dịch vụ mục tiêu bằng cách gửi luồng dữ liệu quá tải hoặc yêu cầu HTTP bất hợp pháp ",
             "T1498.001 - Network Flooding DoS: Tấn công từ chối dịch vụ phân tán, sử dụng nhiều thiết bị để gửi lưu lượng tấn công đồng thời làm ngừng hoạt động toàn bộ hệ thống mạng",
-            "T1071 - Application Layer Protocol: : Kẻ tấn công sử dụng giao thức ứng dụng chuẩn để điều khiển botnet",
+            "T1071 - Application Layer Protocol: Kẻ tấn công sử dụng giao thức ứng dụng chuẩn để điều khiển botnet",
             "N/A"],
         "Mức độ Nguy cơ (Severity)": ["⚠️ Medium", "🚨 High", "🔴 Critical", "🔴 Critical", "🟢 Safe"]
     }
@@ -123,19 +124,19 @@ def show_predict_page(model, scaler):
     **Khu vực giám sát:** Tải lên tệp nhật ký lưu lượng mạng (.csv) được trích xuất từ thiết bị định tuyến hoặc tường lửa để phân tích.
     """)
 
-    uploaded_file = st.file_uploader(
+    upload_file = st.file_uploader(
         "Tải lên tệp lưu lượng mạng (.csv)",
         type=["csv"]
     )
 
-    if uploaded_file is None:
+    if upload_file is None:
         st.info("Trạng thái: Đang chờ dữ liệu đầu vào...")
         if "prediction_results" in st.session_state:
             del st.session_state["prediction_results"]
         return
 
     try:
-        df = pd.read_csv(uploaded_file)
+        df = pd.read_csv(upload_file)
     except Exception as e:
         st.error("Lỗi đọc tệp. Vui lòng kiểm tra định dạng tệp.")
         return
@@ -180,10 +181,19 @@ def show_prediction_dashboard(result_df):
     attack_count = total_flows - benign_count
     attack_rate = attack_count / total_flows * 100 if total_flows > 0 else 0
 
-    if attack_count > 0:
-        st.error(f"⚠️ MỨC ĐỘ NGUY HIỂM: CAO | Đã phát hiện {attack_count} luồng mạng độc hại!")
+    if attack_count == 0:
+        st.success("✅ MỨC ĐỘ NGUY HIỂM: THẤP | Hệ thống an toàn, không phát hiện xâm nhập")
+    elif attack_count < 5:
+        st.warning(f"⚠️ MỨC ĐỘ NGUY HIỂM: TRUNG BÌNH | Phát hiện {attack_count} luồng nghi vấn")
+        
     else:
-        st.success("✅ MỨC ĐỘ NGUY HIỂM: THẤP | Hệ thống an toàn, không phát hiện xâm nhập.")
+        st.error(f"🚨 MỨC ĐỘ NGUY HIỂM: CAO | Đã phát hiện {attack_count} luồng mạng độc hại!")
+        st.toast("Đang phân tích mức độ nghiêm trọng...", icon="🔥")
+        time.sleep(0.5)
+        st.toast("CẢNH BÁO: Tải trọng luồng mạng tăng đột biến!", icon="🚨")
+        time.sleep(0.5)
+        st.toast("Yêu cầu: Kiểm tra Playbook ứng phó!", icon="🛡️")
+        
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Tổng số connection", total_flows)
@@ -193,21 +203,28 @@ def show_prediction_dashboard(result_df):
     st.markdown("---")
 
     if attack_count > 0:
+        
+
         col_chart, col_action = st.columns([1, 1])
         
         attack_df = result_df[result_df["Predicted_Label"] != "BENIGN"]
         top_attack = attack_df["Predicted_Label"].value_counts().idxmax()
+        if "Destination Port" in attack_df.columns:
+            st.subheader("Các cổng đích bị tấn công nhiều nhất")
+            top_ports = attack_df["Destination Port"].value_counts().head(10)
+            st.bar_chart(top_ports)
         
         with col_chart:
-            st.subheader("📊 Phân bố Loại hình tấn công")
+            st.subheader("📊 Phân bố loại hình tấn công")
             attack_counts = attack_df["Predicted_Label"].value_counts()
             st.bar_chart(attack_counts, color="#ff4b4b") 
 
         with col_action:
-            st.subheader("🛡️ Đề xuất ứng phó tự động (Playbook)")
+            st.subheader("🛡️ Đề xuất ứng phó (Playbook)")
             st.warning(f"**Tấn công chủ đạo được phát hiện: {top_attack}**")
-            
+            st.info(f"MITRE ATT&CK: {anh_xa(top_attack)}")
             if "DoS" in top_attack or "DDoS" in top_attack:
+
                 st.markdown("""
                 **Hành động khuyến nghị:**
                 * Kích hoạt Rule giới hạn tốc độ (Rate Limiting) trên WAF.
@@ -226,7 +243,7 @@ def show_prediction_dashboard(result_df):
 
 
 
-    st.subheader("📄 Nhật ký Sự kiện Mạng (Network Event Logs)")
+    st.subheader("📄 Nhật ký sự kiện mạng (Network Event Logs)")
     unique_labels = sorted(result_df["Predicted_Label"].astype(str).unique().tolist())
     label_options = [
         "Tất cả lưu lượng (All Traffic)", 
@@ -256,12 +273,24 @@ def show_prediction_dashboard(result_df):
         st.info("Không có nhật ký phù hợp với bộ lọc.")
 
     csv_data = result_df.to_csv(index=False).encode("utf-8-sig")
+    json_data = result_df.to_json(orient = "records")
     st.download_button(
         label="📥 Xuất báo cáo sự cố(csv)",
-        data=csv_data,
+        data=csv_data, 
         file_name="canh_bao_luu_luong.csv",
         mime="text/csv"
     )
+    st.download_button(
+        label= "📥 Xuất log (json)",
+        data= json_data,
+        file_name= "canh_bao_luu_luong.json",
+        mime= "application/json"
+        
+    )
+    st.info("""
+        Lưu ý: Kết quả dự đoán được sinh ra bởi mô hình học máy và có thể tồn tại sai số. 
+        Hệ thống hoạt động như một công cụ hỗ trợ giám sát, không thay thế hoàn toàn quá trình phân tích của chuyên gia an ninh mạng.
+        """)
 def prepare_uploaded_data(df, scaler, already_scaled=False):
 
     missing_cols = [
@@ -282,6 +311,17 @@ def prepare_uploaded_data(df, scaler, already_scaled=False):
         X_model = scaler.transform(X)
 
     return df_clean, X_model, [], removed_rows
+def anh_xa(label):
+    if "PortScan" in label:
+        return "T1046 - Network Service Scanning"
+    elif "DDoS" in label:
+        return "T1498.001 - Network Flooding DoS"
+    elif "DoS" in label:
+        return "T1498 - Network Denial of Service"
+    elif "Bot" in label:
+        return "T1071 - Application Layer Protocol"
+    else:
+        return "Chưa ánh xạ"
 
 
 def show_evaluation_page():
