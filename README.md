@@ -104,7 +104,7 @@ Do đó, sơ đồ trên được sử dụng để minh họa bối cảnh tri�
 
 Luồng xử lý trong phạm vi demo:
 
-```text
+
 CSV chứa đặc trưng lưu lượng mạng
 → Upload lên giao diện Streamlit
 → Kiểm tra dữ liệu đầu vào
