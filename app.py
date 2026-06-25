@@ -38,7 +38,7 @@ def show_intro_page():
     
     col1.metric("Mô hình sử dụng", "Random Forest")
     col2.metric("Đặc trưng trích xuất", "12 Features")
-    col3.metric("Các loại tấn công", "8 loại hình")
+    col3.metric("Các loại tấn công", "7 loại hình")
     col4.metric("Độ chính xác kiểm thử", "99.31%")
     st.write("")
 
@@ -247,7 +247,7 @@ def show_prediction_dashboard(result_df):
 
 
 
-    st.subheader("📄 Nhật ký sự kiện mạng (Network Event Logs)")
+    st.subheader("📄 Nhật ký sự kiện mạng")
     unique_labels = sorted(result_df["Predicted_Label"].astype(str).unique().tolist())
     label_options = [
         "Tất cả lưu lượng (All Traffic)", 
